@@ -225,27 +225,23 @@ def main():
     ]
 
     # TODO: Create two separate security groups and obtain the group ids
-    # Create Load Generator Security Group
     try:
         sg1 = ec2.create_security_group(GroupName='LG_SG', Description='Load Generator SG')
         sg1.authorize_ingress(IpPermissions=sg_permissions)
-        # Add tags to newly created SG
         sg1.create_tags(Tags=TAGS)
         sg1_id = sg1.id
     except botocore.exceptions.ClientError as e:
         if e.response['Error']['Code'] == 'InvalidGroup.Duplicate':
-            # Retrieve existing SG
             sgs = list(ec2.security_groups.filter(GroupNames=['LG_SG']))
             sg1 = sgs[0]
             sg1_id = sg1.id
         else:
             raise e
 
-    # Create Web Service Security Group
+  
     try:
         sg2 = ec2.create_security_group(GroupName='WS_SG', Description='Web Service SG')
         sg2.authorize_ingress(IpPermissions=sg_permissions)
-        # Add tags to newly created SG
         sg2.create_tags(Tags=TAGS)
         sg2_id = sg2.id
     except botocore.exceptions.ClientError as e:
@@ -273,7 +269,6 @@ def main():
     log_name = initialize_test(lg_dns, web_service_dns)
     last_launch_time = get_test_start_time(lg_dns, log_name)
     
-    # Correction: Ensure start time is aware for comparison
     if last_launch_time.tzinfo is None:
         last_launch_time = last_launch_time.replace(tzinfo=timezone.utc)
 
@@ -282,10 +277,7 @@ def main():
         # TODO: Check RPS and last launch time
         # TODO: Add New Web Service Instance if Required
         
-        # Correction: Define variables needed for logic
-        # Scaling Rule: Check cooldown. If test not done and cooldown passed, add instance.
-        # We don't strictly need to check RPS > 50 because implicit goal is to reach it.
-        # But we must respect the 100s cooldown.
+       
         now = datetime.now(timezone.utc)
         if (now - last_launch_time).total_seconds() > 100:
             add_web_service_instance(lg_dns, sg2_id, log_name)
@@ -303,7 +295,6 @@ def main():
     if instances:
         ids = [i.id for i in instances]
         ec2.instances.filter(InstanceIds=ids).terminate()
-        # Wait for all instances to terminate
         for i in instances:
             i.wait_until_terminated()
         
