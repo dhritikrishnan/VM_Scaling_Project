@@ -137,7 +137,7 @@ def destroy_resources():
     :return: None
     """
     # TODO: implement this method
-    print_section('X - Destroying Resources')
+   print_section('X - Destroying Resources')
     
     asg_client = boto3.client('autoscaling', region_name='us-east-1')
     elbv2 = boto3.client('elbv2', region_name='us-east-1')
@@ -147,11 +147,13 @@ def destroy_resources():
     asg_name = 'ASG-Web-Service'
     lb_name = 'ASG-Load-Balancer'
     tg_name = 'ASG-Target-Group'
-    lt_name = 'ASG-Launch-Template'
+    lt_name = 'ASG_Launch_Template'
     
+   
     print("Deleting Alarms...")
     cw.delete_alarms(AlarmNames=['Web-Service-High-CPU', 'Web-Service-Low-CPU'])
 
+    
     print("Deleting Auto Scaling Group...")
     try:
         asg_client.delete_auto_scaling_group(AutoScalingGroupName=asg_name, ForceDelete=True)
@@ -168,30 +170,58 @@ def destroy_resources():
     except Exception as e:
         print(f"ASG deletion skipped/failed: {e}")
 
+        
     print("Deleting Load Balancer...")
     try:
+        
         response = elbv2.describe_load_balancers(Names=[lb_name])
         lb_arn = response['LoadBalancers'][0]['LoadBalancerArn']
+        
+        
+        listeners = elbv2.describe_listeners(LoadBalancerArn=lb_arn)
+        for listener in listeners.get('Listeners', []):
+            elbv2.delete_listener(ListenerArn=listener['ListenerArn'])
+            
+        
         elbv2.delete_load_balancer(LoadBalancerArn=lb_arn)
+        
+        
         waiter = elbv2.get_waiter('load_balancers_deleted')
         waiter.wait(LoadBalancerArns=[lb_arn])
+        print("Load Balancer Deleted.")
     except Exception as e:
         print(f"LB deletion skipped: {e}")
 
+    
     print("Deleting Target Group...")
-    try:
-        response = elbv2.describe_target_groups(Names=[tg_name])
-        tg_arn = response['TargetGroups'][0]['TargetGroupArn']
-        elbv2.delete_target_group(TargetGroupArn=tg_arn)
-    except Exception as e:
-        print(f"TG deletion skipped: {e}")
+    for _ in range(5):  
+        try:
+            response = elbv2.describe_target_groups(Names=[tg_name])
+            tg_arn = response['TargetGroups'][0]['TargetGroupArn']
+            elbv2.delete_target_group(TargetGroupArn=tg_arn)
+            print("Target Group Deleted.")
+            break
+        except botocore.exceptions.ClientError as e:
+            if 'ResourceInUse' in str(e):
+                print("Target Group still in use, waiting...")
+                time.sleep(5)
+            elif 'TargetGroupNotFound' in str(e):
+                break
+            else:
+                print(f"TG deletion failed: {e}")
+                break
+        except Exception as e:
+            print(f"TG deletion skipped: {e}")
+            break
 
+   
     print("Deleting Launch Template...")
     try:
         ec2.delete_launch_template(LaunchTemplateName=lt_name)
     except Exception as e:
         print(f"LT deletion skipped: {e}")
 
+   
     print("Terminating Load Generator...")
     try:
         response = ec2.describe_instances(Filters=[
@@ -206,17 +236,27 @@ def destroy_resources():
     except Exception as e:
         print(f"LG termination skipped: {e}")
 
+   
     print("Deleting Security Groups...")
     time.sleep(5)
     for name in ['Elastic_LB', 'LG']:
         try:
             res = ec2.describe_security_groups(GroupNames=[name])
             sg_id = res['SecurityGroups'][0]['GroupId']
-            ec2.delete_security_group(GroupId=sg_id)
+            
+            # Retry loop for dependency violations
+            for _ in range(5):
+                try:
+                    ec2.delete_security_group(GroupId=sg_id)
+                    print(f"SG {name} deleted.")
+                    break
+                except botocore.exceptions.ClientError as e:
+                    if 'DependencyViolation' in str(e):
+                        time.sleep(5)
+                    else:
+                        raise e
         except Exception as e:
             print(f"SG {name} deletion skipped: {e}")
-    
-
 
 def print_section(msg):
     """
