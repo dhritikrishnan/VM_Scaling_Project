@@ -42,7 +42,7 @@ def create_instance(ami, sg_id):
     """
     instance = None
 
-    ec2 = boto3.resource('ec2')
+    ec2 = boto3.resource('ec2', region_name='us-east-1')
     instances = ec2.create_instances(
         ImageId=ami,
         InstanceType=INSTANCE_TYPE,
@@ -208,7 +208,7 @@ def main():
     #   - Register Web Service DNS with Load Generator
     #   - Add Web Service instances to Load Generator
     #   - Terminate resources
-    ec2 = boto3.resource('ec2')
+    ec2 = boto3.resource('ec2', region_name='us-east-1')
 
     print_section('1 - create two security groups')
     sg_permissions = [
