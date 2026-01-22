@@ -369,6 +369,18 @@ def main():
     except botocore.exceptions.ClientError as e:
         if 'AlreadyExists' in str(e):
             print("Launch Template already exists.")
+            ec2_client.delete_launch_template(LaunchTemplateName='ASG-Launch-Template')
+            ec2_client.create_launch_template(
+                LaunchTemplateName='ASG-Launch-Template',
+                LaunchTemplateData={
+                    'ImageId': WEB_SERVICE_AMI,
+                    'InstanceType': INSTANCE_TYPE,
+                    'SecurityGroupIds': [sg2_id],
+                    'Monitoring': {'Enabled': True},
+                    'TagSpecifications': [{'ResourceType': 'instance', 'Tags': TAGS}]
+                }
+            )
+            print("Launch Template recreated.")
         else:
             raise e
 
