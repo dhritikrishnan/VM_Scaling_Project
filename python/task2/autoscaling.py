@@ -137,7 +137,7 @@ def destroy_resources():
     :return: None
     """
     # TODO: implement this method
-   print_section('X - Destroying Resources')
+    print_section('X - Destroying Resources')
     
     asg_client = boto3.client('autoscaling', region_name='us-east-1')
     elbv2 = boto3.client('elbv2', region_name='us-east-1')
