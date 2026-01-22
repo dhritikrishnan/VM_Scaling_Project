@@ -367,8 +367,8 @@ def main():
             }
         )
     except botocore.exceptions.ClientError as e:
-        if e.response['Error']['Code'] == 'InvalidLaunchTemplateName.AlreadyExists':
-            pass
+        if 'AlreadyExists' in str(e):
+            print("Launch Template already exists.")
         else:
             raise e
 
