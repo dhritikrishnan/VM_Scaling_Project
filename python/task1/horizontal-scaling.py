@@ -190,10 +190,14 @@ def get_test_start_time(lg_dns, log_name):
     start_time = None
     while start_time is None:
         config = configparser.ConfigParser(strict=False)
-        config.read_string(requests.get(log_string).text)
+        log_text = requests.get(log_string).text
+        config.read_string(log_text)
         # By default, options names in a section are converted
         # to lower case by configparser
-        start_time = dict(config.items('Test')).get('starttime', None)
+        if config.has_section('Test'):
+            start_time = dict(config.items('Test')).get('starttime', None)
+        else:
+             time.sleep(1)
     return parse(start_time)
 
 
