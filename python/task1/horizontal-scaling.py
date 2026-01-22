@@ -42,7 +42,7 @@ def create_instance(ami, sg_id):
     """
     instance = None
 
-    ec2 = boto3.resource('ec2', region_name='us-east-1')
+    ec2 = boto3.resource('ec2')
     instances = ec2.create_instances(
         ImageId=ami,
         InstanceType=INSTANCE_TYPE,
