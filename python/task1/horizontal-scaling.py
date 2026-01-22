@@ -303,7 +303,9 @@ def main():
     if instances:
         ids = [i.id for i in instances]
         ec2.instances.filter(InstanceIds=ids).terminate()
-        instances[0].wait_until_terminated()
+        # Wait for all instances to terminate
+        for i in instances:
+            i.wait_until_terminated()
         
     
     sg1.delete()
