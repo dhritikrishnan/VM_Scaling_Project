@@ -1,4 +1,3 @@
-
 import boto3
 import botocore
 import requests
@@ -7,7 +6,7 @@ import json
 import configparser
 import re
 from dateutil.parser import parse
-
+from datetime import datetime, timezone
 
 ########################################
 # Constants
@@ -43,9 +42,27 @@ def create_instance(ami, sg_id):
     """
     instance = None
 
-    # TODO: Create an EC2 instance
+    ec2 = boto3.resource('ec2')
+    instances = ec2.create_instances(
+        ImageId=ami,
+        InstanceType=INSTANCE_TYPE,
+        MinCount=1,
+        MaxCount=1,
+        SecurityGroupIds=[sg_id],
+        TagSpecifications=[
+            {
+                'ResourceType': 'instance',
+                'Tags': TAGS
+            },
+        ]
+    )
+    instance = instances[0]
+    
     # Wait for the instance to enter the running state
+    instance.wait_until_running()
+    
     # Reload the instance attributes
+    instance.reload()
 
     return instance
 
@@ -70,7 +87,7 @@ def initialize_test(lg_dns, first_web_service_dns):
             pass 
 
     # TODO: return log File name
-    return ""
+    return get_test_id(response)
 
 
 def print_section(msg):
@@ -137,6 +154,8 @@ def add_web_service_instance(lg_dns, sg2_id, log_name):
         elif is_test_complete(lg_dns, log_name):
             print("New WS not submitted because test already completed.")
             break
+        # Added sleep to prevent rapid retry loops
+        time.sleep(1)
 
 
 def get_rps(lg_dns, log_name):
@@ -189,6 +208,7 @@ def main():
     #   - Register Web Service DNS with Load Generator
     #   - Add Web Service instances to Load Generator
     #   - Terminate resources
+    ec2 = boto3.resource('ec2')
 
     print_section('1 - create two security groups')
     sg_permissions = [
@@ -201,31 +221,68 @@ def main():
     ]
 
     # TODO: Create two separate security groups and obtain the group ids
-    sg1_id = None  # Security group for Load Generator instances
-    sg2_id = None  # Security group for Web Service instances
+    sg1 = ec2.create_security_group(GroupName='LG_SG', Description='Load Generator SG')
+    sg1.authorize_ingress(IpPermissions=sg_permissions)
+    sg1_id = sg1.id  # Security group for Load Generator instances
+
+    sg2 = ec2.create_security_group(GroupName='WS_SG', Description='Web Service SG')
+    sg2.authorize_ingress(IpPermissions=sg_permissions)
+    sg2_id = sg2.id # Security group for Web Service instances
 
     print_section('2 - create LG')
 
     # TODO: Create Load Generator instance and obtain ID and DNS
-    lg = ''
-    lg_id = ''
-    lg_dns = ''
+    lg = create_instance(LOAD_GENERATOR_AMI, sg1_id)
+    lg_id = lg.id
+    lg_dns = lg.public_dns_name
     print("Load Generator running: id={} dns={}".format(lg_id, lg_dns))
 
     # TODO: Create First Web Service Instance and obtain the DNS
-    web_service_dns = ''
+    ws = create_instance(WEB_SERVICE_AMI, sg2_id)
+    web_service_dns = ws.public_dns_name
 
     print_section('3. Submit the first WS instance DNS to LG, starting test.')
     log_name = initialize_test(lg_dns, web_service_dns)
     last_launch_time = get_test_start_time(lg_dns, log_name)
+    
+    # Correction: Ensure start time is aware for comparison
+    if last_launch_time.tzinfo is None:
+        last_launch_time = last_launch_time.replace(tzinfo=timezone.utc)
+
+    ws_count = 1
     while not is_test_complete(lg_dns, log_name):
         # TODO: Check RPS and last launch time
         # TODO: Add New Web Service Instance if Required
+        
+        # Correction: Define variables needed for logic
+        current_rps = get_rps(lg_dns, log_name)
+        now = datetime.now(timezone.utc)
+        
+        if (current_rps / ws_count) > 50:
+            if (now - last_launch_time).total_seconds() > 20:
+                print(f"RPS {current_rps} is high. Scaling up...")
+                add_web_service_instance(lg_dns, sg2_id, log_name)
+                ws_count += 1
+                last_launch_time = datetime.now(timezone.utc)
+
         time.sleep(1)
 
     print_section('End Test')
 
     # TODO: Terminate Resources
+    
+    filters = [{'Name': 'tag:Project', 'Values': ['vm-scaling']}]
+    instances = list(ec2.instances.filter(Filters=filters))
+    
+    if instances:
+        ids = [i.id for i in instances]
+        ec2.instances.filter(InstanceIds=ids).terminate()
+        instances[0].wait_until_terminated()
+        
+    
+    sg1.delete()
+    sg2.delete()
+    print("Resources terminated.")
 
 
 if __name__ == '__main__':
