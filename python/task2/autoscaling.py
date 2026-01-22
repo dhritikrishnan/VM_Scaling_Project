@@ -146,8 +146,8 @@ def destroy_resources():
     
     asg_name = 'ASG-Web-Service'
     lb_name = 'ASG-Load-Balancer'
-    tg_name = 'ASG_Target_Group'
-    lt_name = 'ASG_Launch_Template'
+    tg_name = 'ASG-Target-Group'
+    lt_name = 'ASG-Launch-Template'
     
     print("Deleting Alarms...")
     cw.delete_alarms(AlarmNames=['Web-Service-High-CPU', 'Web-Service-Low-CPU'])
@@ -317,7 +317,7 @@ def main():
 
     try:
         ec2_client.create_launch_template(
-            LaunchTemplateName='ASG_Launch_Template',
+            LaunchTemplateName='ASG-Launch-Template',
             LaunchTemplateData={
                 'ImageId': WEB_SERVICE_AMI,
                 'InstanceType': INSTANCE_TYPE,
@@ -339,7 +339,7 @@ def main():
 
     try:
         response = elbv2.create_target_group(
-            Name='ASG_Target_Group',
+            Name='ASG-Target-Group',
             Protocol='HTTP',
             Port=80,
             VpcId=sg2.vpc_id,
@@ -355,7 +355,7 @@ def main():
         tg_arn = response['TargetGroups'][0]['TargetGroupArn']
     except botocore.exceptions.ClientError as e:
         if e.response['Error']['Code'] == 'DuplicateTargetGroupName':
-            response = elbv2.describe_target_groups(Names=["ASG_Target_Group"])
+            response = elbv2.describe_target_groups(Names=["ASG-Target-Group"])
             tg_arn = response['TargetGroups'][0]['TargetGroupArn']
             print("Target Group exists, retrieved ARN")
         else:
@@ -459,7 +459,7 @@ def main():
         asg_client.create_auto_scaling_group(
             AutoScalingGroupName=asg_name,
             LaunchTemplate={
-                'LaunchTemplateName': 'ASG_Launch_Template', 
+                'LaunchTemplateName': 'ASG-Launch-Template', 
                 'Version': '$Latest'
             },
             MinSize=1,               
