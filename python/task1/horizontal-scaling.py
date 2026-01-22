@@ -221,13 +221,38 @@ def main():
     ]
 
     # TODO: Create two separate security groups and obtain the group ids
-    sg1 = ec2.create_security_group(GroupName='LG_SG', Description='Load Generator SG')
-    sg1.authorize_ingress(IpPermissions=sg_permissions)
-    sg1_id = sg1.id  # Security group for Load Generator instances
+    # Create Load Generator Security Group
+    try:
+        sg1 = ec2.create_security_group(GroupName='LG_SG', Description='Load Generator SG')
+        sg1.authorize_ingress(IpPermissions=sg_permissions)
+        # Add tags to newly created SG
+        sg1.create_tags(Tags=TAGS)
+        sg1_id = sg1.id
+    except botocore.exceptions.ClientError as e:
+        if e.response['Error']['Code'] == 'InvalidGroup.Duplicate':
+            print("Security Group LG_SG already exists. Using existing group.")
+            # Retrieve existing SG
+            sgs = list(ec2.security_groups.filter(GroupNames=['LG_SG']))
+            sg1 = sgs[0]
+            sg1_id = sg1.id
+        else:
+            raise e
 
-    sg2 = ec2.create_security_group(GroupName='WS_SG', Description='Web Service SG')
-    sg2.authorize_ingress(IpPermissions=sg_permissions)
-    sg2_id = sg2.id # Security group for Web Service instances
+    # Create Web Service Security Group
+    try:
+        sg2 = ec2.create_security_group(GroupName='WS_SG', Description='Web Service SG')
+        sg2.authorize_ingress(IpPermissions=sg_permissions)
+        # Add tags to newly created SG
+        sg2.create_tags(Tags=TAGS)
+        sg2_id = sg2.id
+    except botocore.exceptions.ClientError as e:
+        if e.response['Error']['Code'] == 'InvalidGroup.Duplicate':
+            print("Security Group WS_SG already exists. Using existing group.")
+            sgs = list(ec2.security_groups.filter(GroupNames=['WS_SG']))
+            sg2 = sgs[0]
+            sg2_id = sg2.id
+        else:
+            raise e
 
     print_section('2 - create LG')
 
