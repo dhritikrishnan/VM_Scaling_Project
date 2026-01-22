@@ -230,7 +230,6 @@ def main():
         sg1_id = sg1.id
     except botocore.exceptions.ClientError as e:
         if e.response['Error']['Code'] == 'InvalidGroup.Duplicate':
-            print("Security Group LG_SG already exists. Using existing group.")
             # Retrieve existing SG
             sgs = list(ec2.security_groups.filter(GroupNames=['LG_SG']))
             sg1 = sgs[0]
@@ -247,7 +246,7 @@ def main():
         sg2_id = sg2.id
     except botocore.exceptions.ClientError as e:
         if e.response['Error']['Code'] == 'InvalidGroup.Duplicate':
-            print("Security Group WS_SG already exists. Using existing group.")
+            
             sgs = list(ec2.security_groups.filter(GroupNames=['WS_SG']))
             sg2 = sgs[0]
             sg2_id = sg2.id
