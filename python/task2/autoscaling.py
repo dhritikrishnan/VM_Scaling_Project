@@ -77,6 +77,7 @@ def initialize_test(load_generator_dns, first_web_service_dns):
         try:
             response = requests.get(add_ws_string)
         except requests.exceptions.ConnectionError:
+            print("Waiting for Load Generator to respond...")
             time.sleep(1)
             pass 
 
@@ -100,6 +101,7 @@ def initialize_warmup(load_generator_dns, load_balancer_dns):
         try:
             response = requests.get(add_ws_string)
         except requests.exceptions.ConnectionError:
+            print("Waiting for Load Generator to respond...")
             time.sleep(1)
             pass  
 
@@ -282,7 +284,10 @@ def is_test_complete(load_generator_dns, log_name):
     f.write(log_text)
     f.close()
 
-    return '[Test finished]' in log_text
+    print(f"Checking log at: {log_string}")
+    finished = '[Test finished]' in log_text
+    print(f"Test finished status: {finished}")
+    return finished
 
 
 ########################################
@@ -612,14 +617,18 @@ def main():
 
     print_section('10. Submit ELB DNS to LG, starting warm up test.')
     warmup_log_name = initialize_warmup(lg_dns, lb_dns)
+    print(f"Warmup started. Log file: {warmup_log_name}.log")
     while not is_test_complete(lg_dns, warmup_log_name):
-        time.sleep(1)
+        print("Waiting for warmup test to complete...")
+        time.sleep(10)
 
     print_section('11. Submit ELB DNS to LG, starting auto scaling test.')
     # May take a few minutes to start actual test after warm up test finishes
     log_name = initialize_test(lg_dns, lb_dns)
+    print(f"Autoscaling test started. Log file: {log_name}.log")
     while not is_test_complete(lg_dns, log_name):
-        time.sleep(1)
+        print("Waiting for autoscaling test to complete...")
+        time.sleep(10)
 
     destroy_resources()
 
