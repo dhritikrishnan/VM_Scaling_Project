@@ -164,9 +164,9 @@ def destroy_resources():
                 response = asg_client.describe_auto_scaling_groups(AutoScalingGroupNames=[asg_name])
                 if not response['AutoScalingGroups']: break
                 if response['AutoScalingGroups'][0]['Status'] == 'Delete in progress':
-                    time.sleep(5)
+                    time.sleep(2)
                 else:
-                    time.sleep(5)
+                    time.sleep(2)
             except:
                 break
     except Exception as e:
