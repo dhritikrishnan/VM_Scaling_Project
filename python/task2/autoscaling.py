@@ -454,6 +454,12 @@ def main():
         print(f"Load Balancer '{lb_name}' created.")
         print(f"ARN: {lb_arn}")
         print(f"DNS: {lb_dns}")
+        
+        # Wait for Load Balancer to be active
+        #print("Waiting for Load Balancer to be active...")
+        waiter = elbv2.get_waiter('load_balancer_available')
+        waiter.wait(LoadBalancerArns=[lb_arn])
+        print("Load Balancer is active.")
 
     except botocore.exceptions.ClientError as e:
         if e.response['Error']['Code'] == 'DuplicateLoadBalancerName':
