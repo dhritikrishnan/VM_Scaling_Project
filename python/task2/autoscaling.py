@@ -144,10 +144,10 @@ def destroy_resources():
     ec2 = boto3.client('ec2', region_name='us-east-1')
     cw = boto3.client('cloudwatch', region_name='us-east-1')
     
-    asg_name = 'ASG-Web-Service'
-    lb_name = 'ASG-Load-Balancer'
-    tg_name = 'ASG-Target-Group'
-    lt_name = 'ASG_Launch_Template'
+    asg_name = configuration['auto_scaling_group_name']
+    lb_name = configuration['load_balancer_name']
+    tg_name = configuration['auto_scaling_target_group']
+    lt_name = configuration['launch_template_name']
     
    
     print("Deleting Alarms...")
@@ -357,7 +357,7 @@ def main():
 
     try:
         ec2_client.create_launch_template(
-            LaunchTemplateName='ASG-Launch-Template',
+            LaunchTemplateName=configuration['launch_template_name'],
             LaunchTemplateData={
                 'ImageId': WEB_SERVICE_AMI,
                 'InstanceType': INSTANCE_TYPE,
@@ -369,9 +369,9 @@ def main():
     except botocore.exceptions.ClientError as e:
         if 'AlreadyExists' in str(e):
             print("Launch Template already exists.")
-            ec2_client.delete_launch_template(LaunchTemplateName='ASG-Launch-Template')
+            ec2_client.delete_launch_template(LaunchTemplateName=configuration['launch_template_name'])
             ec2_client.create_launch_template(
-                LaunchTemplateName='ASG-Launch-Template',
+                LaunchTemplateName=configuration['launch_template_name'],
                 LaunchTemplateData={
                     'ImageId': WEB_SERVICE_AMI,
                     'InstanceType': INSTANCE_TYPE,
@@ -391,7 +391,7 @@ def main():
 
     try:
         response = elbv2.create_target_group(
-            Name='ASG-Target-Group',
+            Name=configuration['auto_scaling_target_group'],
             Protocol='HTTP',
             Port=80,
             VpcId=sg2.vpc_id,
@@ -407,7 +407,7 @@ def main():
         tg_arn = response['TargetGroups'][0]['TargetGroupArn']
     except botocore.exceptions.ClientError as e:
         if e.response['Error']['Code'] == 'DuplicateTargetGroupName':
-            response = elbv2.describe_target_groups(Names=["ASG-Target-Group"])
+            response = elbv2.describe_target_groups(Names=[configuration['auto_scaling_target_group']])
             tg_arn = response['TargetGroups'][0]['TargetGroupArn']
             print("Target Group exists, retrieved ARN")
         else:
@@ -417,7 +417,7 @@ def main():
 
     # TODO create Load Balancer
     # https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/elbv2.html
-    lb_name = "ASG-Load-Balancer"
+    lb_name = configuration['load_balancer_name']
     lb_arn = ''
     lb_dns = ''
     print("lb started. ARN={}, DNS={}".format(lb_arn, lb_dns))
@@ -438,7 +438,7 @@ def main():
 
     try:
         response = elbv2.create_load_balancer(
-            Name="ASG-Load-Balancer",
+            Name=configuration['load_balancer_name'],
             Subnets=selected_subnet_ids,
             SecurityGroups=[sg2_id],
             Scheme='internet-facing',
@@ -495,7 +495,7 @@ def main():
     # TODO create Autoscaling group
 
     asg_client = boto3.client('autoscaling', region_name='us-east-1')
-    asg_name = 'ASG-Web-Service'
+    asg_name = configuration['auto_scaling_group_name']
 
     asg_tags = []
     for t in TAGS:
@@ -511,17 +511,18 @@ def main():
         asg_client.create_auto_scaling_group(
             AutoScalingGroupName=asg_name,
             LaunchTemplate={
-                'LaunchTemplateName': 'ASG-Launch-Template', 
+                'LaunchTemplateName': configuration['launch_template_name'], 
                 'Version': '$Latest'
             },
-            MinSize=1,               
-            MaxSize=2,               
-            DesiredCapacity=1,       
+            MinSize=int(configuration['asg_min_size']),               
+            MaxSize=int(configuration['asg_max_size']),               
+            DesiredCapacity=int(configuration['asg_min_size']),       
             VPCZoneIdentifier=subnet_str, 
             TargetGroupARNs=[tg_arn],     
             HealthCheckType='EC2',        
-            HealthCheckGracePeriod=300,   
-            Tags=asg_tags
+            HealthCheckGracePeriod=int(configuration['health_check_grace_period']),   
+            Tags=asg_tags,
+            DefaultCooldown=int(configuration['asg_default_cool_down_period'])
         )
         print(f"Auto Scaling Group '{asg_name}' created.")
 
@@ -542,8 +543,8 @@ def main():
         PolicyName='Scale-Out-Policy',
         PolicyType='SimpleScaling',
         AdjustmentType='ChangeInCapacity',
-        ScalingAdjustment=1,     
-        Cooldown=60              
+        ScalingAdjustment=int(configuration['scale_out_adjustment']),     
+        Cooldown=int(configuration['cool_down_period_scale_out'])              
     )
     scale_out_policy_arn = response_out['PolicyARN']
     #print(f"Scale Out Policy created. ARN: {scale_out_policy_arn}")
@@ -552,8 +553,8 @@ def main():
         PolicyName='Scale-In-Policy',
         PolicyType='SimpleScaling',
         AdjustmentType='ChangeInCapacity',
-        ScalingAdjustment=-1,    
-        Cooldown=60
+        ScalingAdjustment=int(configuration['scale_in_adjustment']),    
+        Cooldown=int(configuration['cool_down_period_scale_in'])
     )
     scale_in_policy_arn = response_in['PolicyARN']
     #print(f"Scale In Policy created. ARN: {scale_in_policy_arn}")
@@ -569,9 +570,9 @@ def main():
         MetricName='CPUUtilization',
         Namespace='AWS/EC2',
         Statistic='Average',
-        Period=300,                     
-        EvaluationPeriods=1,            
-        Threshold=80.0,                 
+        Period=int(configuration['alarm_period']),
+        EvaluationPeriods=int(configuration['alarm_evaluation_periods_scale_out']),
+        Threshold=float(configuration['cpu_upper_threshold']),
         ComparisonOperator='GreaterThanThreshold',
         Dimensions=[
             {
@@ -589,9 +590,9 @@ def main():
         MetricName='CPUUtilization',
         Namespace='AWS/EC2',
         Statistic='Average',
-        Period=300,                     
-        EvaluationPeriods=1,
-        Threshold=20.0,                 
+        Period=int(configuration['alarm_period']),
+        EvaluationPeriods=int(configuration['alarm_evaluation_periods_scale_in']),
+        Threshold=float(configuration['cpu_lower_threshold']),
         ComparisonOperator='LessThanThreshold',
         Dimensions=[
             {
