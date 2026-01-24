@@ -77,10 +77,12 @@ data "aws_vpc" "default" {
   default = true
 }
 
-data "aws_subnets" "default" {
+data "aws_ami" "latest" {
+  most_recent = true
+  owners      = ["amazon"]
   filter {
-    name   = "vpc-id"
-    values = [data.aws_vpc.default.id]
+    name   = "name"
+    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
   }
 }
 
@@ -88,9 +90,9 @@ data "aws_subnets" "default" {
 # TODO: Add missing values below
 # ================================
 resource "aws_launch_template" "lt" {
-  name            = "ASG_Launch_Template"
-  image_id        = "ami-0e3d567ccafde16c5"
-  instance_type   = "m5.large"
+  name            = "lt-vm-scaling"
+  image_id        = data.aws_ami.latest.id
+  instance_type   = "t2.micro"
 
   monitoring {
     enabled = true
@@ -104,96 +106,76 @@ resource "aws_launch_template" "lt" {
       Project = "vm-scaling"
     }
   }
+
+  user_data = base64encode("#!/bin/bash\nyum install -y httpd\nsystemctl start httpd\necho 'OK' > /var/www/html/index.html")
 }
 
 # Create an auto scaling group with appropriate parameters
 # TODO: fill the missing values per the placeholders
 resource "aws_autoscaling_group" "asg" {
   availability_zones        = ["us-east-1a"]
-  name                      = "ASG-Web-Service"
-  max_size                  = 4
+  max_size                  = 2
   min_size                  = 1
   desired_capacity          = 1
-  default_cooldown          = 50
-  health_check_grace_period = 180
-  health_check_type         = "EC2"
-  
+  default_cooldown          = 300
+  health_check_grace_period = 300
+  health_check_type         = "ELB"
   launch_template {
     id      = aws_launch_template.lt.id
     version = "$Latest"
   }
-  target_group_arns         = [aws_lb_target_group.asg_tg.arn]
-  vpc_zone_identifier       = data.aws_subnets.default.ids
+  target_group_arns         = [aws_lb_target_group.tg.arn]
   tag {
-    key = local.asg_tags.key
-    value = local.asg_tags.value
+    key                 = local.asg_tags.key
+    value               = local.asg_tags.value
     propagate_at_launch = local.asg_tags.propagate_at_launch
   }
 }
 
 # TODO: Create a Load Generator AWS instance with proper tags
-resource "aws_instance" "lg" {
-  ami                    = "ami-0469ff4742c562d63"
-  instance_type          = "m5.large"
+resource "aws_instance" "load_generator" {
+  ami           = data.aws_ami.latest.id
+  instance_type = "t2.micro"
+  tags          = { Project = "vm-scaling", Name = "LoadGenerator" }
   vpc_security_group_ids = [aws_security_group.lg.id]
-  
-  tags = {
-    Project = "vm-scaling"
-    Name    = "Load Generator"
-  }
 }
-
 
 # Step 2:
 # TODO: Create an Application Load Balancer with appropriate listeners and target groups
 # The lb_listener documentation demonstrates how to connect these resources
 # Create and attach your subnet to the Application Load Balancer 
-#
-# https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lb
-# https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/subnet
-# https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lb_listener
-# https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lb_target_group
 
-resource "aws_lb" "asg_lb" {
-  name               = "ASG-Load-Balancer"
+resource "aws_subnet" "alb_sub1" {
+  vpc_id            = data.aws_vpc.default.id
+  cidr_block        = "172.31.250.0/24"
+  availability_zone = "us-east-1a"
+}
+
+resource "aws_lb" "alb" {
+  name               = "vm-scaling-alb"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.elb_asg.id]
-  subnets            = data.aws_subnets.default.ids
-
-  tags = {
-    Project = "vm-scaling"
-  }
+  subnets            = [aws_subnet.alb_sub1.id]
+  tags               = local.common_tags
 }
 
-resource "aws_lb_target_group" "asg_tg" {
-  name     = "ASG-Target-Group"
+resource "aws_lb_target_group" "tg" {
+  name     = "vm-scaling-tg"
   port     = 80
   protocol = "HTTP"
   vpc_id   = data.aws_vpc.default.id
-
-  health_check {
-    path                = "/"
-    protocol            = "HTTP"
-    matcher             = "200"
-    interval            = 30
-    timeout             = 5
-    healthy_threshold   = 2
-    unhealthy_threshold = 2
-  }
 }
 
-resource "aws_lb_listener" "asg_listener" {
-  load_balancer_arn = aws_lb.asg_lb.arn
+resource "aws_lb_listener" "listener" {
+  load_balancer_arn = aws_lb.alb.arn
   port              = "80"
   protocol          = "HTTP"
-
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.asg_tg.arn
+    target_group_arn = aws_lb_target_group.tg.arn
   }
 }
-
 
 # Step 3:
 # TODO: Create 2 policies: 1 for scaling out and another for scaling in
@@ -201,24 +183,20 @@ resource "aws_lb_listener" "asg_listener" {
 # https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/autoscaling_policy
 
 resource "aws_autoscaling_policy" "scale_out" {
-  name                   = "Scale-Out-Policy"
+  name                   = "scale-out"
   scaling_adjustment     = 1
   adjustment_type        = "ChangeInCapacity"
-  cooldown               = 60
+  cooldown               = 300
   autoscaling_group_name = aws_autoscaling_group.asg.name
-  policy_type            = "SimpleScaling"
 }
 
 resource "aws_autoscaling_policy" "scale_in" {
-  name                   = "Scale-In-Policy"
+  name                   = "scale-in"
   scaling_adjustment     = -1
   adjustment_type        = "ChangeInCapacity"
-  cooldown               = 20
+  cooldown               = 300
   autoscaling_group_name = aws_autoscaling_group.asg.name
-  policy_type            = "SimpleScaling"
 }
-
-
 
 # Step 4:
 # TODO: Create 2 cloudwatch alarms: 1 for scaling out and another for scaling in
@@ -227,39 +205,30 @@ resource "aws_autoscaling_policy" "scale_in" {
 # https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_metric_alarm
 
 resource "aws_cloudwatch_metric_alarm" "high_cpu" {
-  alarm_name          = "Web-Service-High-CPU"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = 1
+  alarm_name          = "high-cpu"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  evaluation_periods  = "2"
   metric_name         = "CPUUtilization"
   namespace           = "AWS/EC2"
-  period              = 30
+  period              = "60"
   statistic           = "Average"
-  threshold           = 60
-
-  dimensions = {
-    AutoScalingGroupName = aws_autoscaling_group.asg.name
-  }
-
-  alarm_actions = [aws_autoscaling_policy.scale_out.arn]
+  threshold           = "70"
+  alarm_actions       = [aws_autoscaling_policy.scale_out.arn]
+  dimensions          = { AutoScalingGroupName = aws_autoscaling_group.asg.name }
 }
 
 resource "aws_cloudwatch_metric_alarm" "low_cpu" {
-  alarm_name          = "Web-Service-Low-CPU"
-  comparison_operator = "LessThanThreshold"
-  evaluation_periods  = 1
+  alarm_name          = "low-cpu"
+  comparison_operator = "LessThanOrEqualToThreshold"
+  evaluation_periods  = "2"
   metric_name         = "CPUUtilization"
   namespace           = "AWS/EC2"
-  period              = 30
+  period              = "60"
   statistic           = "Average"
-  threshold           = 50
-
-  dimensions = {
-    AutoScalingGroupName = aws_autoscaling_group.asg.name
-  }
-
-  alarm_actions = [aws_autoscaling_policy.scale_in.arn]
+  threshold           = "30"
+  alarm_actions       = [aws_autoscaling_policy.scale_in.arn]
+  dimensions          = { AutoScalingGroupName = aws_autoscaling_group.asg.name }
 }
-
 
 ######################################
 # SECOND SECTION ENDS                #
