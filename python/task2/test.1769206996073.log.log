@@ -1,0 +1,109 @@
+; MSB AutoScaling Test
+
+; Test launched. Please check every minute for update.
+[Test Start]
+time=2026-01-23 22:23:16
+type=autoscaling
+testId=1769206996073
+testFile=test.1769206996073.log
+
+
+[Minute 1]
+rps=13.80
+
+[Minute 2]
+rps=12.98
+
+[Minute 3]
+rps=4.02
+
+[Minute 4]
+rps=4.02
+
+[Minute 5]
+rps=4.00
+
+[Minute 6]
+rps=14.90
+
+[Minute 7]
+rps=13.42
+
+[Minute 8]
+rps=21.80
+
+[Minute 9]
+rps=16.60
+
+[Minute 10]
+rps=18.23
+
+[Minute 11]
+rps=14.43
+
+[Minute 12]
+rps=13.72
+
+[Minute 13]
+rps=4.02
+
+[Minute 14]
+rps=4.02
+
+[Minute 15]
+rps=4.02
+
+[Minute 16]
+rps=12.02
+
+[Minute 17]
+rps=17.28
+
+[Minute 18]
+rps=17.65
+
+[Minute 19]
+rps=12.02
+
+[Minute 20]
+rps=19.42
+
+[Minute 21]
+rps=13.67
+
+[Minute 22]
+rps=11.55
+
+[Minute 23]
+rps=4.00
+
+[Minute 24]
+rps=3.17
+
+[Load Generator]
+username=null
+platform=AWS
+instanceId=i-0cfb9aa79f19cbf03
+instanceType=m5.large
+hostname=ec2-3-80-246-105.compute-1.amazonaws.com
+
+[Elastic Load Balancer]
+dns=asg-load-balancer-628760110.us-east-1.elb.amazonaws.com
+
+[Test End]
+time=2026-01-23 22:48:07
+averageRps=11.48
+maxRps=21.80
+pattern=961
+ih=120.87
+; Instance-Hour Usage
+; i-01cf94063f6fa9496	m5.large	78.93	2026-01-23 22:23:16	2026-01-23 22:43:00
+; i-02368d52e301e2712	m5.large	2.13	2026-01-23 22:32:30	2026-01-23 22:33:02
+; i-040fc1e743ca6c74c	m5.large	2.20	2026-01-23 22:26:51	2026-01-23 22:27:24
+; i-07a6bd51e178ba7d8	m5.large	6.20	2026-01-23 22:40:37	2026-01-23 22:42:10
+; i-07c2d335c706675aa	m5.large	20.80	2026-01-23 22:41:53	2026-01-23 22:47:05
+; i-0b6977454b1a32db5	m5.large	8.40	2026-01-23 22:25:36	2026-01-23 22:27:42
+; i-0da225b8aa6047eb7	m5.large	2.20	2026-01-23 22:30:37	2026-01-23 22:31:10
+
+; MSB is validating ......
+[Test finished]
