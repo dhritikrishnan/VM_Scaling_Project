@@ -133,10 +133,11 @@ resource "aws_autoscaling_group" "asg" {
 }
 
 # TODO: Create a Load Generator AWS instance with proper tags
+ #tags                   = { Project = "vm-scaling", Name = "LoadGenerator" }
 resource "aws_instance" "load_generator" {
   ami                    = data.aws_ami.latest.id
   instance_type          = "t2.micro"
-  tags                   = { Project = "vm-scaling", Name = "LoadGenerator" }
+  tags                   = local.common_tags
   vpc_security_group_ids = [aws_security_group.lg.id]
   subnet_id              = aws_subnet.alb_sub1.id
 }
