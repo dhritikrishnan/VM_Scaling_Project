@@ -113,7 +113,7 @@ resource "aws_launch_template" "lt" {
 # Create an auto scaling group with appropriate parameters
 # TODO: fill the missing values per the placeholders
 resource "aws_autoscaling_group" "asg" {
-  availability_zones        = ["us-east-1a"]
+  availability_zones        = ["us-east-1a", "us-east-1b"]
   max_size                  = 2
   min_size                  = 1
   desired_capacity          = 1
@@ -134,10 +134,11 @@ resource "aws_autoscaling_group" "asg" {
 
 # TODO: Create a Load Generator AWS instance with proper tags
 resource "aws_instance" "load_generator" {
-  ami           = data.aws_ami.latest.id
-  instance_type = "t2.micro"
-  tags          = { Project = "vm-scaling", Name = "LoadGenerator" }
+  ami                    = data.aws_ami.latest.id
+  instance_type          = "t2.micro"
+  tags                   = { Project = "vm-scaling", Name = "LoadGenerator" }
   vpc_security_group_ids = [aws_security_group.lg.id]
+  subnet_id              = aws_subnet.alb_sub1.id
 }
 
 # Step 2:
@@ -151,12 +152,18 @@ resource "aws_subnet" "alb_sub1" {
   availability_zone = "us-east-1a"
 }
 
+resource "aws_subnet" "alb_sub2" {
+  vpc_id            = data.aws_vpc.default.id
+  cidr_block        = "172.31.251.0/24"
+  availability_zone = "us-east-1b"
+}
+
 resource "aws_lb" "alb" {
   name               = "vm-scaling-alb"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.elb_asg.id]
-  subnets            = [aws_subnet.alb_sub1.id]
+  subnets            = [aws_subnet.alb_sub1.id, aws_subnet.alb_sub2.id]
   tags               = local.common_tags
 }
 
