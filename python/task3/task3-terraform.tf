@@ -91,8 +91,8 @@ data "aws_ami" "latest" {
 # ================================
 resource "aws_launch_template" "lt" {
   name            = "lt-vm-scaling"
-  image_id        = data.aws_ami.latest.id
-  instance_type   = "t2.micro"
+  image_id        = "ami-0e3d567ccafde16c5"
+  instance_type   = "m5.large"
 
   monitoring {
     enabled = true
@@ -135,8 +135,8 @@ resource "aws_autoscaling_group" "asg" {
 # TODO: Create a Load Generator AWS instance with proper tags
  #tags                   = { Project = "vm-scaling", Name = "LoadGenerator" }
 resource "aws_instance" "load_generator" {
-  ami                    = data.aws_ami.latest.id
-  instance_type          = "t2.micro"
+  ami                    = "ami-0469ff4742c562d63"
+  instance_type          = "m5.large"
   tags                   = local.common_tags
   vpc_security_group_ids = [aws_security_group.lg.id]
   subnet_id              = aws_subnet.alb_sub1.id
