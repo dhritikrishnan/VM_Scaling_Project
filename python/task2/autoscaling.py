@@ -617,18 +617,14 @@ def main():
 
     print_section('10. Submit ELB DNS to LG, starting warm up test.')
     warmup_log_name = initialize_warmup(lg_dns, lb_dns)
-    print(f"Warmup started. Log file: {warmup_log_name}.log")
     while not is_test_complete(lg_dns, warmup_log_name):
-        print("Waiting for warmup test to complete...")
-        time.sleep(10)
+        time.sleep(1)
 
     print_section('11. Submit ELB DNS to LG, starting auto scaling test.')
     # May take a few minutes to start actual test after warm up test finishes
     log_name = initialize_test(lg_dns, lb_dns)
-    print(f"Autoscaling test started. Log file: {log_name}.log")
     while not is_test_complete(lg_dns, log_name):
-        print("Waiting for autoscaling test to complete...")
-        time.sleep(10)
+        time.sleep(1)
 
     destroy_resources()
 
